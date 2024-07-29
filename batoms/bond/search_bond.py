@@ -1,7 +1,10 @@
 import bpy
 import numpy as np
+# TODO: 4.2+ support
+from .. import __package__ as batoms
 from batoms.base.object import ObjectGN
-from batoms.utils.butils import object_mode, compareNodeType, get_node_by_name
+from batoms.utils.butils import object_mode, compareNodeType
+from batoms.utils.utils_node import get_node_by_name
 from batoms.utils import number2String, string2Number
 import logging
 
@@ -151,6 +154,8 @@ class SearchBond(ObjectGN):
 
     def build_geometry_node(self):
         """ """
+        from batoms.utils.utils_node import get_projected_position
+
         nodes = self.gn_node_group.nodes
         links = self.gn_node_group.links
         GroupInput = nodes[0]
@@ -193,16 +198,21 @@ class SearchBond(ObjectGN):
         TransferOffsets.data_type = "FLOAT_VECTOR"
         links.new(ObjectOffsets.outputs["Geometry"], TransferOffsets.inputs[0])
         links.new(PositionOffsets.outputs["Position"], TransferOffsets.inputs[1])
-        OffsetNode = self.vectorDotMatrix(
-            self.gn_node_group, TransferOffsets.outputs[2], self.batoms.cell, ""
+        # get cartesian positions
+        project_point = get_projected_position(
+            self.gn_node_group,
+            TransferOffsets.outputs["Value"],
+            self.batoms.cell.obj,
+            self.label,
+            scaled=False,
         )
         # we need one add operation to get the positions with offset
         VectorAdd = get_node_by_name(
             nodes, "%s_VectorAdd" % (self.label), "ShaderNodeVectorMath"
         )
         VectorAdd.operation = "ADD"
-        links.new(TransferBatoms.outputs[2], VectorAdd.inputs[0])
-        links.new(OffsetNode.outputs[0], VectorAdd.inputs[1])
+        links.new(TransferBatoms.outputs["Value"], VectorAdd.inputs[0])
+        links.new(project_point.outputs[0], VectorAdd.inputs[1])
         # set positions
         SetPosition = get_node_by_name(
             nodes, "%s_SetPosition" % self.label, "GeometryNodeSetPosition"
@@ -269,7 +279,7 @@ class SearchBond(ObjectGN):
             TransferScale = get_node_by_name(
                 nodes, "%s_TransferScale" % (self.label), "GeometryNodeSampleIndex"
             )
-            links.new(TransferScale.outputs[2], InstanceOnPoint.inputs["Scale"])
+            links.new(TransferScale.outputs["Value"], InstanceOnPoint.inputs["Scale"])
         else:
             links.new(GroupInput.outputs[6], InstanceOnPoint.inputs["Scale"])
         links.new(CompareSpecies.outputs[0], BoolShow.inputs[1])
@@ -284,7 +294,7 @@ class SearchBond(ObjectGN):
         Args:
             spname (str): name of the species
         """
-        from batoms.utils.butils import get_node_by_name
+        from batoms.utils.utils_node import get_node_by_name
 
         # update  instancers
         ObjectInfo = get_node_by_name(

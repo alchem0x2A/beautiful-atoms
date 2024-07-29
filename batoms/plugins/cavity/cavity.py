@@ -10,7 +10,9 @@ from batoms.base.object import ObjectGN
 from batoms.plugins.base import PluginObject
 from .setting import CavitySettings
 from scipy import spatial
-from batoms.utils.butils import get_node_by_name
+# TODO: 4.2+ support
+from ... import __package__ as batoms
+from batoms.utils.utils_node import get_node_by_name
 from batoms.utils import string2Number
 import logging
 

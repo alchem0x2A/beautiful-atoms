@@ -8,7 +8,8 @@ from bpy.props import (
     EnumProperty,
 )
 
-
+# TODO: 4.2+ support
+from ... import __package__ as batoms
 from batoms.gui.utils import (
     get_active_bpy_data,
     get_attr,
@@ -118,7 +119,7 @@ class BATOMS_PT_template(Panel):
     bl_parent_id = "VIEW3D_PT_Batoms_template"
     # bl_options = {'DEFAULT_CLOSED'}
 
-    COMPAT_ENGINES = {"BLENDER_RENDER", "BLENDER_EEVEE", "BLENDER_WORKBENCH"}
+    COMPAT_ENGINES = {"BLENDER_RENDER", "BLENDER_EEVEE_NEXT", "BLENDER_WORKBENCH"}
 
     @classmethod
     def poll(cls, context):

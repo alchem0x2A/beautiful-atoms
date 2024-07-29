@@ -3,6 +3,8 @@
 
 import bpy
 from bpy.types import Menu, Panel, UIList
+# TODO: 4.2+ support
+from .. import __package__ as batoms
 
 
 class BATOMS_MT_species_context_menu(Menu):
@@ -44,7 +46,7 @@ class BATOMS_PT_species(Panel):
     bl_region_type = "UI"
     bl_options = {"DEFAULT_CLOSED"}
 
-    COMPAT_ENGINES = {"BLENDER_RENDER", "BLENDER_EEVEE", "BLENDER_WORKBENCH"}
+    COMPAT_ENGINES = {"BLENDER_RENDER", "BLENDER_EEVEE_NEXT", "BLENDER_WORKBENCH"}
 
     @classmethod
     def poll(cls, context):

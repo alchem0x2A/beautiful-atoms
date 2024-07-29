@@ -6,10 +6,12 @@ This module defines the highlight object in the Batoms package.
 
 import bpy
 import numpy as np
+# TODO: 4.2+ support
+from ... import __package__ as batoms
 from batoms.base.object import ObjectGN
 from batoms.plugins.base import PluginObject
 from .setting import HighlightSettings
-from batoms.utils.butils import get_node_by_name
+from batoms.utils.utils_node import get_node_by_name
 from batoms.utils import string2Number
 import logging
 
@@ -215,7 +217,7 @@ class Highlight(ObjectGN, PluginObject):
         )
         TransferBatoms.data_type = "FLOAT_VECTOR"
         links.new(ObjectBatoms.outputs["Geometry"], TransferBatoms.inputs[0])
-        links.new(PositionBatoms.outputs["Position"], TransferBatoms.inputs[3])
+        links.new(PositionBatoms.outputs["Position"], TransferBatoms.inputs["Value"])
         links.new(GroupInput.outputs[1], TransferBatoms.inputs["Index"])
         #
         # set positions
