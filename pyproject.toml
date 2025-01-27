@@ -13,10 +13,16 @@ authors = [
     { name = "Beautiful Atoms Team", email = "xing.wang@gmail.com" }
 ]
 
-
+# The following dependencies are for batoms alone.
+# When building the extensions, we need to add constraints from
+# the blender package as well.
 dependencies = [
-    "ase",
-    "scikit-image",
+    "ase>=3.23.0",
+    "scipy>=1.14.0",
+    "scikit-image>=0.24.0",
+    "spglib>=2.5.0",
+    "pymatgen",			# Recent versions of pymatgen requires numpy>=1.25.0
+    "openbabel-wheel>=3.0.0",
 ]
 
 
