@@ -15,13 +15,14 @@ authors = [
 
 # The following dependencies are for batoms alone.
 # When building the extensions, we need to add constraints from
-# the blender package as well.
+# the blender package defined in project.optional-dependencies.blender-extension as well.
+#
 dependencies = [
     "ase>=3.23.0",
     "scipy>=1.14.0",
     "scikit-image>=0.24.0",
     "spglib>=2.5.0",
-    "pymatgen",			# Recent versions of pymatgen requires numpy>=1.25.0
+    "pymatgen",			# Recent versions of pymatgen requires numpy>=1.25.0, which may conflict with blender's built-in numpy
     "openbabel-wheel>=3.0.0",
 ]
 
@@ -43,6 +44,12 @@ tests = [
     "pytest~=7.0",
     "pytest-cov~=2.7,<2.11",
 ]
+# Extra dependencies from Blender's built-in packages
+# mostly dependencies of the bpy module itself, like
+# ["numpy==1.24.3", "zstandard==0.16.0", ]
+# Note: this section will be filled-in at runtime
+blender-extension = []
+
 
 [tool.setuptools.packages.find]
 where = ["."]
