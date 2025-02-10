@@ -1,110 +1,234 @@
-"""Script to download external wheels needed for building Blender extension for Blender >= 4.2
+"""
+Script to build and package Blender extensions with external dependencies.
+This script is designed to be run inside Blender's Python environment.
 
-This script is intended to be run by Blender's Python interpreter.
-Additionally, the following tools may also be needed:
+Note: Blender 4.2+ is needed!
+
+Additionally, the following tools may be required:
 - C/C++ compiler
-- Python header
+- Python headers
+
+Usage:
+    blender -b -P build_extension.py -- --repo-root . --build-dir build --export-dir export --allow-overwrite
 """
 
+import subprocess
+import sys
 import shutil
 import tempfile
 import toml
 import site
 import warnings
+import argparse
 from pathlib import Path
 from pip._internal.operations.freeze import freeze
 from pip._internal.commands.wheel import WheelCommand
 
 
+def get_blender_bin():
+    """Obtain the Blender binary path from the bpy module."""
+    try:
+        import bpy
+
+        blender_bin = Path(bpy.app.binary_path)
+    except ImportError:
+        raise ImportError(
+            "Cannot import bpy module! "
+            "Make sure build_extension.py is executed with Blender's `-P` option."
+        )
+    return blender_bin
+
+
 def get_blender_site_packages():
-    site_lists = site.getsitepackages()
-    if len(site_lists) > 1:
-        warnings.warn("Multiple site packages are present! Only choose first.")
-    return [site_lists[0]]
+    """Retrieve Blender's default site-packages directory."""
+    site_packages = site.getsitepackages()
+    if len(site_packages) > 1:
+        warnings.warn("Multiple site-packages directories found. Using the first one.")
+    return [site_packages[0]]
 
 
 def get_installed_packages():
-    """Get a list of packages already installed in Blender's Python environment.
-    Exclude any user-installed packages from pip freeze --user
-    """
-    # freeze() gives a list of version strings like
-    # "numpy==1.24.3" etc
+    """Retrieve installed packages within Blender's Python environment."""
     pkg_dict = {}
-    # user_sites = [p.split("==")[0]
-    #               for p in freeze(user_only=True,
-    #                               isolated=True,
-    #                               exclude_editable=True)]
     for pkg in freeze(
-        isolated=True,
-        exclude_editable=True,
-        paths=get_blender_site_packages(),
+        isolated=True, exclude_editable=True, paths=get_blender_site_packages()
     ):
         pkg_name, version = pkg.split("==")
-        if pkg_name not in ("pip", "wheel", "setuptools", "distribute"):
+        if pkg_name not in {"pip", "wheel", "setuptools", "distribute"}:
             pkg_dict[pkg_name] = version
     return pkg_dict
 
 
-def generate_pyproject_toml_for_extension(pyproject_path, existing_packages):
-    """Modify the pyproject.toml file section
-    `project.optional-dependencies.blender-extension`
-    with frozen Blender-installed packages.
-    """
+def generate_updated_pyproject(pyproject_path, existing_packages):
+    """Modify the `blender-extension` optional dependencies in `pyproject.toml`."""
     with open(pyproject_path, "r") as f:
         pyproject = toml.load(f)
 
-    if "blender-extension" not in pyproject["project"]["optional-dependencies"]:
+    if "blender-extension" not in pyproject.get("project", {}).get(
+        "optional-dependencies", {}
+    ):
         raise ValueError(
-            "`blender-extension` dependency not specified. Are you using the latest pyproject.toml?"
+            "`blender-extension` dependency not found in pyproject.toml. "
+            "Ensure you're using the latest version."
         )
 
-    bl_dependencies = [f"{pkg}=={ver}" for pkg, ver in existing_packages.items()]
-    pyproject["project"]["optional-dependencies"]["blender-extension"] = bl_dependencies
+    pyproject["project"]["optional-dependencies"]["blender-extension"] = [
+        f"{pkg}=={ver}" for pkg, ver in existing_packages.items()
+    ]
 
     return pyproject
 
 
 def build_wheels(
-    root=".",
+    repo_root=".",
     source_code="batoms",
-    pyproject_path="pyproject.toml",
-    wheels_dir="wheels",
+    pyproject="pyproject.toml",
+    build_dir="build",
     index_url=None,
 ):
-    """Use the frozen Blender 3rd party packages to build the wheels
-    (including batoms itself) into `wheels_dir`
+    """Build wheels for the extension, including Blender-installed packages.
+    The build_wheels command will also pack batoms itself into a wheel!
     """
-    root = Path(root)
-    source_code_origin = root / source_code
-    pyproject_origin = root / pyproject_path
+    repo_root = Path(repo_root).resolve()
+    build_dir = repo_root / build_dir
+    source_code_origin = repo_root / source_code
+    pyproject_origin = repo_root / pyproject
+
     existing_packages = get_installed_packages()
-    # The wheels dir should be first cleared
-    wheels_dir = root / wheels_dir
-    # copy the source file to tmpdir for building
+
+    # Clear previous wheels
+    wheels_dir = build_dir / "wheels"
+    wheels_dir.mkdir(parents=True, exist_ok=True)
+    for f in wheels_dir.glob("*.whl"):
+        f.unlink()
+
+    # Temporary build environment
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         source_code_target = tmpdir / source_code
         shutil.copytree(source_code_origin, source_code_target)
-        new_pyproject_dict = generate_pyproject_toml_for_extension(
+
+        # Update pyproject.toml
+        updated_pyproject = generate_updated_pyproject(
             pyproject_origin, existing_packages
         )
-        pyproject_target = tmpdir / pyproject_path
+        pyproject_target = tmpdir / pyproject
         with open(pyproject_target, "w") as f:
-            toml.dump(new_pyproject_dict, f)
+            toml.dump(updated_pyproject, f)
 
-        # run the pip wheel builder
-        wc = WheelCommand("wheel", "Download wheels for blender extension")
+        # Run pip wheel builder
+        wc = WheelCommand("wheel", "Download wheels for Blender extension")
         options = [
             "--wheel-dir",
             wheels_dir.as_posix(),
-            "--editable",
             tmpdir.as_posix(),
         ]
-        if index_url is not None:
-            options += [
-                "--index-url",
-                str(index_url),
-            ]
-        # run the command
+        if index_url:
+            options += ["--index-url", str(index_url)]
+
+        print(f"Running: pip wheel {' '.join(options)}")
         wc.main(options)
-    return
+
+    print(f"Build completed. Wheels saved in {wheels_dir}")
+
+
+def update_blender_manifest(
+    repo_root=".", build_dir="build", manifest="blender_manifest.toml"
+):
+    """Update the Blender manifest with built wheels."""
+    repo_root = Path(repo_root)
+    build_dir = repo_root / build_dir
+    manifest_path = repo_root / manifest
+    wheels_dir = build_dir / "wheels"
+
+    wheels_list = [
+        f.relative_to(repo_root).as_posix() for f in wheels_dir.glob("*.whl")
+    ]
+
+    with open(manifest_path, "r") as f:
+        manifest_data = toml.load(f)
+
+    manifest_data["wheels"] = wheels_list
+    toml_header = (
+        "# blender_manifest.toml generated by build_extension.py, "
+        "please do not modify the wheels field.\n"
+    )
+    manifest_str = toml_header + toml.dumps(manifest_data)
+
+    with open(build_dir / "blender_manifest.toml", "w") as f:
+        f.write(manifest_str)
+
+    print(f"Updated manifest at {build_dir / 'blender_manifest.toml'}")
+
+
+def build_extension(blender_bin, build_dir="build", export_dir="export"):
+    """Compile the Blender extension from `build_dir` and export it to `export_dir`."""
+    blender_bin = Path(blender_bin)
+    build_dir = Path(build_dir)
+    export_dir = Path(export_dir)
+
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    commands = [
+        blender_bin.as_posix(),
+        "--command",
+        "extension",
+        "build",
+        "--source-dir",
+        build_dir.as_posix(),
+        "--output-dir",
+        export_dir.as_posix(),
+        "--split-platform",
+    ]
+    subprocess.run(commands, check=True)
+    print(f"Extension build completed. Files exported to {export_dir}")
+
+
+def main():
+    """Main function to parse arguments and execute build steps."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Build extension zip files for beautiful atoms. "
+            "Please provide all options after --"
+        )
+    )
+    parser.add_argument(
+        "--repo-root", default=".", help="Root directory of the repository."
+    )
+    parser.add_argument(
+        "--pyproject", default="pyproject.toml", help="Path to pyproject.toml file."
+    )
+    parser.add_argument(
+        "--manifest",
+        default="blender_manifest.toml",
+        help="Path to blender_manifest.toml.",
+    )
+    parser.add_argument(
+        "--build-dir", default="build", help="Directory to store built files."
+    )
+    parser.add_argument(
+        "--export-dir",
+        default="export",
+        help="Directory for exported Blender extension files.",
+    )
+    # parser.add_argument("--allow-overwrite", action="store_true", help="Allow overwriting existing files.")
+
+    # Extract only arguments after `--`
+    if "--" in sys.argv:
+        script_args = sys.argv[sys.argv.index("--") + 1 :]
+    else:
+        script_args = []  # No arguments provided after --
+
+    args = parser.parse_args(script_args)
+
+    try:
+        build_wheels(args.repo_root, "batoms", args.pyproject, args.build_dir)
+        update_blender_manifest(args.repo_root, args.build_dir, args.manifest)
+        build_extension(get_blender_bin(), args.build_dir, args.export_dir)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

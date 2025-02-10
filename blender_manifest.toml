@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+id = "batoms"
+version = "2.3.0"
+name = "Beautiful Atoms"
+tagline = "Draw and render beautiful atoms and molecules using Blender"
+maintainer = "Beautiful Atoms Team <xing.wang@gmail.com>"
+type = "add-on"
+website = "https://beautiful-atoms.readthedocs.io/en/latest/index.html"
+tags = [ "Geometry Nodes", "Import-Export",]
+blender_version_min = "4.2.0"
+license = [ "SPDX:GPL-3.0-or-later",]
+copyright = [ "2020-2025 Xing Wang",]
+platforms = [ "windows-x64", "macos-arm64",
+              "macos-x64", "linux-x64",]
+# The wheels field are left blank intentionally to be filled
+# by the build_extension.py script.
+wheels = []
+
+[permissions]
+network = "Need to download structures from online database"
+files = "Import/export structures from/to disk"
