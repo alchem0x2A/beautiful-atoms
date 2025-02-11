@@ -9,7 +9,8 @@ Additionally, the following tools may be required:
 - Python headers
 
 Usage:
-    blender -b -P build_extension.py -- --repo-root . --build-dir build --export-dir export --allow-overwrite
+    blender -b -P build_extension.py -- --repo-root . --build-dir build \
+        --export-dir export --allow-overwrite
 """
 
 import subprocess
@@ -25,6 +26,25 @@ from pip._internal.operations.freeze import freeze
 from pip._internal.commands.wheel import WheelCommand
 
 
+def get_platform_string(connector="-"):
+    """Determine the current platform string used for Blender extensions."""
+    import platform
+
+    system = platform.system()
+    machine = platform.machine()
+
+    if system == "Linux" and machine == "x86_64":
+        return f"linux{connector}x64"
+    elif system == "Darwin":
+        return (
+            f"macos{connector}x64" if machine == "x86_64" else f"macos{connector}arm64"
+        )
+    elif system in ["Windows", "Microsoft"]:
+        # TODO: may need to confirm windows-arm64
+        return f"windows{connector}x64"
+    return "unsupported"
+
+
 def get_blender_bin():
     """Obtain the Blender binary path from the bpy module."""
     try:
@@ -33,8 +53,8 @@ def get_blender_bin():
         blender_bin = Path(bpy.app.binary_path)
     except ImportError:
         raise ImportError(
-            "Cannot import bpy module! "
-            "Make sure build_extension.py is executed with Blender's `-P` option."
+            "Cannot import bpy module! Make sure build_extension.py is "
+            "executed with Blender's `-P` option."
         )
     return blender_bin
 
@@ -43,7 +63,9 @@ def get_blender_site_packages():
     """Retrieve Blender's default site-packages directory."""
     site_packages = site.getsitepackages()
     if len(site_packages) > 1:
-        warnings.warn("Multiple site-packages directories found. Using the first one.")
+        warnings.warn(
+            "Multiple site-packages directories found. " "Using the first one."
+        )
     return [site_packages[0]]
 
 
@@ -60,7 +82,7 @@ def get_installed_packages():
 
 
 def generate_updated_pyproject(pyproject_path, existing_packages):
-    """Modify the `blender-extension` optional dependencies in `pyproject.toml`."""
+    """Modify the `blender-extension` optional dependencies in pyproject.toml."""
     with open(pyproject_path, "r") as f:
         pyproject = toml.load(f)
 
@@ -80,19 +102,18 @@ def generate_updated_pyproject(pyproject_path, existing_packages):
 
 
 def build_wheels(
-    repo_root=".",
     source_code="batoms",
     pyproject="pyproject.toml",
     build_dir="build",
     index_url=None,
+    extra_wheels_dirs=[],
 ):
     """Build wheels for the extension, including Blender-installed packages.
     The build_wheels command will also pack batoms itself into a wheel!
     """
-    repo_root = Path(repo_root).resolve()
-    build_dir = repo_root / build_dir
-    source_code_origin = repo_root / source_code
-    pyproject_origin = repo_root / pyproject
+    build_dir = Path(build_dir)
+    source_code_origin = Path(source_code)
+    pyproject_origin = Path(pyproject)
 
     existing_packages = get_installed_packages()
 
@@ -105,14 +126,15 @@ def build_wheels(
     # Temporary build environment
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        source_code_target = tmpdir / source_code
+        source_code_target = tmpdir / source_code_origin.name
         shutil.copytree(source_code_origin, source_code_target)
 
         # Update pyproject.toml
         updated_pyproject = generate_updated_pyproject(
             pyproject_origin, existing_packages
         )
-        pyproject_target = tmpdir / pyproject
+        pyproject_target = tmpdir / pyproject_origin.name
+        print(pyproject_target)
         with open(pyproject_target, "w") as f:
             toml.dump(updated_pyproject, f)
 
@@ -130,19 +152,35 @@ def build_wheels(
         wc.main(options)
 
     print(f"Build completed. Wheels saved in {wheels_dir}")
+    merge_wheels(wheels_dir, extra_wheels_dirs)
+    return
 
 
-def update_blender_manifest(
-    repo_root=".", build_dir="build", manifest="blender_manifest.toml"
-):
+def compress_wheels(build_dir, export_dir):
+    """Compress the built wheels into a zip archive without building the extension.
+    Should only be concerned for single-platform build
+    """
+    build_dir = Path(build_dir)
+    export_dir = Path(export_dir)
+    wheels_dir = build_dir / "wheels"
+
+    if not wheels_dir.exists():
+        raise FileNotFoundError("No wheels found in build directory.")
+
+    zip_path = export_dir / f"batoms-wheels-{get_platform_string(connector='_')}.zip"
+    shutil.make_archive(zip_path.with_suffix(""), "zip", wheels_dir)
+    print(f"Compressed wheels saved at: {zip_path}")
+    return
+
+
+def update_blender_manifest(build_dir="build", manifest="blender_manifest.toml"):
     """Update the Blender manifest with built wheels."""
-    repo_root = Path(repo_root)
-    build_dir = repo_root / build_dir
-    manifest_path = repo_root / manifest
+    build_dir = Path(build_dir)
+    manifest_path = Path(manifest)
     wheels_dir = build_dir / "wheels"
 
     wheels_list = [
-        f.relative_to(repo_root).as_posix() for f in wheels_dir.glob("*.whl")
+        f.relative_to(build_dir).as_posix() for f in wheels_dir.glob("*.whl")
     ]
 
     with open(manifest_path, "r") as f:
@@ -159,14 +197,73 @@ def update_blender_manifest(
         f.write(manifest_str)
 
     print(f"Updated manifest at {build_dir / 'blender_manifest.toml'}")
+    return
 
 
-def build_extension(blender_bin, build_dir="build", export_dir="export"):
-    """Compile the Blender extension from `build_dir` and export it to `export_dir`."""
+def copy_source_code(source_code="batoms", build_dir="build"):
+    """Copy the source code to build_dir"""
+    source_code = Path(source_code)
+    build_dir = Path(build_dir)
+    if not source_code.exists():
+        raise FileNotFoundError(f"Source directory {source_code} does not exist.")
+    shutil.copytree(source_code, build_dir, dirs_exist_ok=True)
+    return
+
+
+def merge_wheels(wheels_dir, extra_wheels_dirs):
+    """Merge additional wheels from other platforms into the primary wheels directory."""
+    wheels_dir = Path(wheels_dir)
+    extra_wheels_dirs = [Path(d) for d in extra_wheels_dirs]
+    if len(extra_wheels_dirs) == 0:
+        print("No extra wheels provided, skip.")
+
+    # Check if all extra wheels directories exist
+    for extra_dir in extra_wheels_dirs:
+        if not extra_dir.exists():
+            raise FileNotFoundError(
+                f"Warning: Extra wheels directory {extra_dir} does not exist."
+            )
+
+    # Ensure all directories contain the same number of wheels
+    num_current_wheels = len(list(wheels_dir.glob("*.whl")))
+    for extra_dir in extra_wheels_dirs:
+        wheel_count = len(list(extra_dir.glob("*.whl")))
+        if num_current_wheels != wheel_count:
+            raise ValueError(
+                f"The number of wheels in {extra_dir} "
+                f"({wheel_count} wheels) is different "
+                f"from {num_current_wheels} in current platform."
+            )
+
+    # Merge wheels while avoiding duplicates
+    for extra_dir in extra_wheels_dirs:
+        for wheel in extra_dir.glob("*.whl"):
+            target_path = wheels_dir / wheel.name
+            if not target_path.exists():
+                shutil.copy2(wheel, wheels_dir)
+                print(f"Merged {wheel.name} from {extra_dir} --> {wheels_dir}")
+    return
+
+
+def clear_dirs(*dirs):
+    """Delete specified directories and recreate them."""
+    for directory in dirs:
+        directory = Path(directory)
+        if directory.exists():
+            shutil.rmtree(directory)
+        directory.mkdir(parents=True, exist_ok=True)
+    return
+
+
+def build_extension(
+    blender_bin, build_dir="build", export_dir="export", current_platform_only=False
+):
+    """Compile the Blender extension from build_dir and export to export_dir."""
     blender_bin = Path(blender_bin)
     build_dir = Path(build_dir)
     export_dir = Path(export_dir)
 
+    build_dir.mkdir(parents=True, exist_ok=True)
     export_dir.mkdir(parents=True, exist_ok=True)
 
     commands = [
@@ -182,13 +279,21 @@ def build_extension(blender_bin, build_dir="build", export_dir="export"):
     ]
     subprocess.run(commands, check=True)
     print(f"Extension build completed. Files exported to {export_dir}")
+    if current_platform_only is True:
+        platform_string = get_platform_string(connector="_")
+        print(f"Current platform is {platform_string}")
+        for zip_file in export_dir.glob("batoms-*.zip"):
+            if platform_string not in zip_file.name:
+                zip_file.unlink()
+                print(f"Remove {zip_file.as_posix()} as no extra wheels provided")
+    return
 
 
 def main():
     """Main function to parse arguments and execute build steps."""
     parser = argparse.ArgumentParser(
         description=(
-            "Build extension zip files for beautiful atoms. "
+            "Build extension zip files for Beautiful Atoms. "
             "Please provide all options after --"
         )
     )
@@ -204,27 +309,54 @@ def main():
         help="Path to blender_manifest.toml.",
     )
     parser.add_argument(
-        "--build-dir", default="build", help="Directory to store built files."
+        "--build-dir", default=None, help="Directory to store built files."
     )
     parser.add_argument(
         "--export-dir",
-        default="export",
+        default=None,
         help="Directory for exported Blender extension files.",
     )
-    # parser.add_argument("--allow-overwrite", action="store_true", help="Allow overwriting existing files.")
+    parser.add_argument(
+        "--extra-wheels",
+        nargs="*",
+        help="Directories containing extra wheels from other platforms.",
+    )
+    parser.add_argument(
+        "--only-compress-wheels",
+        "-z",
+        action="store_true",
+        help="Only compress the wheels without building the extension.",
+    )
 
     # Extract only arguments after `--`
-    if "--" in sys.argv:
-        script_args = sys.argv[sys.argv.index("--") + 1 :]
-    else:
-        script_args = []  # No arguments provided after --
-
+    script_args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     args = parser.parse_args(script_args)
 
+    repo_root = Path(args.repo_root).resolve()
+    build_dir = Path(args.build_dir) if args.build_dir else repo_root / "build"
+    export_dir = Path(args.export_dir) if args.export_dir else repo_root / "export"
+    source_code = repo_root / "batoms"
+    pyproject = repo_root / args.pyproject
+    manifest = repo_root / args.manifest
+    extra_wheels = (
+        [Path(ew) for ew in args.extra_wheels] if args.extra_wheels is not None else []
+    )
+    current_platform_only = len(extra_wheels) == 0
+
     try:
-        build_wheels(args.repo_root, "batoms", args.pyproject, args.build_dir)
-        update_blender_manifest(args.repo_root, args.build_dir, args.manifest)
-        build_extension(get_blender_bin(), args.build_dir, args.export_dir)
+        # import pdb; pdb.set_trace()
+        clear_dirs(build_dir, export_dir)
+        copy_source_code(source_code, build_dir)
+        build_wheels(source_code, pyproject, build_dir, extra_wheels)
+        if args.only_compress_wheels:
+            if len(extra_wheels) > 0:
+                raise ValueError(
+                    "only_compress_wheels should only be performed when no extra wheels are provided."
+                )
+            compress_wheels(build_dir, export_dir)
+            return
+        update_blender_manifest(build_dir, manifest)
+        build_extension(get_blender_bin(), build_dir, export_dir, current_platform_only)
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)

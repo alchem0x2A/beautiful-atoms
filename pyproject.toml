@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = [ "setuptools", "wheel",]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,53 +8,26 @@ version = "2.3.0"
 description = "A Python package for creating, editing, and rendering atoms and molecules structures using Blender."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "GPL-3.0-or-later" }
-authors = [
-    { name = "Beautiful Atoms Team", email = "xing.wang@gmail.com" }
-]
+dependencies = [ "ase>=3.23.0", "scipy>=1.14.0", "scikit-image>=0.24.0", "spglib>=2.5.0", "pymatgen", "openbabel-wheel>=3.0.0",]
+[[project.authors]]
+name = "Beautiful Atoms Team"
+email = "xing.wang@gmail.com"
 
-# The following dependencies are for batoms alone.
-# When building the extensions, we need to add constraints from
-# the blender package defined in project.optional-dependencies.blender-extension as well.
-#
-dependencies = [
-    "ase>=3.23.0",
-    "scipy>=1.14.0",
-    "scikit-image>=0.24.0",
-    "spglib>=2.5.0",
-    "pymatgen",			# Recent versions of pymatgen requires numpy>=1.25.0, which may conflict with blender's built-in numpy
-    "openbabel-wheel>=3.0.0",
-]
-
+[project.license]
+text = "GPL-3.0-or-later"
 
 [project.urls]
 Documentation = "https://beautiful-atoms.readthedocs.io/en/latest/index.html"
 Source = "https://github.com/beautiful-atoms/beautiful-atoms"
 
-
 [project.optional-dependencies]
-pre-commit = [
-    "pre-commit~=2.2",
-    "pylint~=2.17.4",
-]
-dev = [
-    "toml",
-]
-tests = [
-    "pytest~=7.0",
-    "pytest-cov~=2.7,<2.11",
-]
-# Extra dependencies from Blender's built-in packages
-# mostly dependencies of the bpy module itself, like
-# ["numpy==1.24.3", "zstandard==0.16.0", ]
-# Note: this section will be filled-in at runtime
-blender-extension = []
-
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["batoms*"]
+pre-commit = [ "pre-commit~=2.2", "pylint~=2.17.4",]
+dev = [ "toml",]
+tests = [ "pytest~=7.0", "pytest-cov~=2.7,<2.11",]
+blender-extension = [ "autopep8==2.3.1", "certifi==2021.10.8", "charset-normalizer==2.0.10", "Cython==0.29.30", "idna==3.3", "numpy==1.24.3", "pycodestyle==2.12.1", "requests==2.27.1", "toml==0.10.2", "urllib3==1.26.8", "zstandard==0.16.0",]
 
 [project.entry-points]
-# Define entry points here if needed, e.g.:
-# "console_scripts" = { "batoms-cli" = "batoms.cli:main" }
+
+[tool.setuptools.packages.find]
+where = [ ".",]
+include = [ "batoms*",]
