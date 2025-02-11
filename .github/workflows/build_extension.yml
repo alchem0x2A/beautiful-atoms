@@ -25,9 +25,8 @@ jobs:
         uses: actions/checkout@v4
 
       # For now we try to use the python header matching blender
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          activate-environment: batoms
           python-version: "3.11"
 
       - name: Install compilers
