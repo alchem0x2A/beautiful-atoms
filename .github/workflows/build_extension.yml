@@ -12,60 +12,60 @@ on:
       - workflow
   workflow_dispatch:
 
-  jobs:
-    build-platforms:
-      name: Build Wheels on ${{ matrix.os }}
-      runs-on: ${{ matrix.os }}
-      strategy:
-        matrix:
-          os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
+jobs:
+  build-platforms:
+    name: Build Wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, macos-13, windows-latest]
 
-      steps:
-        - name: Checkout Repository
-          uses: actions/checkout@v4
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-        # For now we try to use the python header matching blender
-        - uses: conda-incubator/setup-miniconda@v2
-          with:
-            activate-environment: batoms
-            python-version: "3.11"
+      # For now we try to use the python header matching blender
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: batoms
+          python-version: "3.11"
 
-        - name: Install compilers
-          run: |
-            mamba install -c conda-forge compilers
+      - name: Install compilers
+        run: |
+          mamba install -c conda-forge compilers
 
-        - name: Download and Install Blender
-          run: |
-            BLENDER_VERSION="4.3.2"
-            case "${{ matrix.os }}" in
-            ubuntu-latest)
-              wget https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-linux-x64.tar.xz
-              tar -xJf blender-$BLENDER_VERSION-linux-x64.tar.xz
-              echo "BLENDER_BIN=$GITHUB_WORKSPACE/blender-$BLENDER_VERSION-linux-x64/blender" >> $GITHUB_ENV
-              ;;
-            macos-13)
-              curl -L -o blender.dmg https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-macos-x64.dmg
-              hdiutil attach blender.dmg
-              echo "BLENDER_BIN=/Volumes/Blender/Blender.app/Contents/MacOS/Blender" >> $GITHUB_ENV
-              ;;
-            macos-latest)
-              curl -L -o blender.dmg https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-macos-arm64.dmg
-              hdiutil attach blender.dmg
-              echo "BLENDER_BIN=/Volumes/Blender/Blender.app/Contents/MacOS/Blender" >> $GITHUB_ENV
-              ;;
-            windows-latest)
-              curl -L -o blender.zip https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-windows-x64.zip
-              unzip blender.zip
-              echo "BLENDER_BIN=$GITHUB_WORKSPACE/Blender/blender.exe" >> $GITHUB_ENV
-              ;;
-            esac
+      - name: Download and Install Blender
+        run: |
+          BLENDER_VERSION="4.3.2"
+          case "${{ matrix.os }}" in
+          ubuntu-latest)
+            wget https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-linux-x64.tar.xz
+            tar -xJf blender-$BLENDER_VERSION-linux-x64.tar.xz
+            echo "BLENDER_BIN=$GITHUB_WORKSPACE/blender-$BLENDER_VERSION-linux-x64/blender" >> $GITHUB_ENV
+            ;;
+          macos-13)
+            curl -L -o blender.dmg https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-macos-x64.dmg
+            hdiutil attach blender.dmg
+            echo "BLENDER_BIN=/Volumes/Blender/Blender.app/Contents/MacOS/Blender" >> $GITHUB_ENV
+            ;;
+          macos-latest)
+            curl -L -o blender.dmg https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-macos-arm64.dmg
+            hdiutil attach blender.dmg
+            echo "BLENDER_BIN=/Volumes/Blender/Blender.app/Contents/MacOS/Blender" >> $GITHUB_ENV
+            ;;
+          windows-latest)
+            curl -L -o blender.zip https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-windows-x64.zip
+            unzip blender.zip
+            echo "BLENDER_BIN=$GITHUB_WORKSPACE/Blender/blender.exe" >> $GITHUB_ENV
+            ;;
+          esac
 
-        - name: Run Extension Build
-          run: |
-            ${{ env.BLENDER_BIN }} -b -P scripts/build_extension.py -- --repo-root . --build-dir build --export-dir export
+      - name: Run Extension Build
+        run: |
+          ${{ env.BLENDER_BIN }} -b -P scripts/build_extension.py -- --repo-root . --build-dir build --export-dir export
 
-        - name: Upload Built Wheels and Extension
-          uses: actions/upload-artifact@v4
-          with:
-            name: blender-extension-${{ matrix.os }}
-            path: export/*.zip
+      - name: Upload Built Wheels and Extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: blender-extension-${{ matrix.os }}
+          path: export/*.zip
