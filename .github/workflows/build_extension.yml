@@ -29,6 +29,7 @@ jobs:
         with:
           python-version: "3.11"
           mamba-version: "*"
+          channels: conda-forge,defaults
 
       - name: Install compilers
         run: |
