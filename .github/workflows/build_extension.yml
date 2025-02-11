@@ -25,15 +25,15 @@ jobs:
         uses: actions/checkout@v4
 
       # For now we try to use the python header matching blender
-      - uses: conda-incubator/setup-miniconda@v3
-        with:
-          python-version: "3.11"
-          mamba-version: "*"
-          channels: conda-forge,defaults
+      # - uses: conda-incubator/setup-miniconda@v3
+      #   with:
+      #     python-version: "3.11"
+      #     mamba-version: "*"
+      #     channels: conda-forge,defaults
 
-      - name: Install compilers
-        run: |
-          mamba install -c conda-forge compilers
+      # - name: Install compilers
+      #   run: |
+      #     mamba install -c conda-forge compilers
 
       - name: Download and Install Blender
         run: |
