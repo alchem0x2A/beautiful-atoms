@@ -28,6 +28,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: "3.11"
+          mamba-version: "*"
 
       - name: Install compilers
         run: |
