@@ -60,7 +60,7 @@ jobs:
           windows-latest)
             curl -L -o blender.zip https://download.blender.org/release/Blender4.3/blender-$BLENDER_VERSION-windows-x64.zip
             unzip blender.zip
-            echo "BLENDER_BIN=$GITHUB_WORKSPACE/Blender/blender.exe" >> $GITHUB_ENV
+            echo "BLENDER_BIN=./Blender/blender.exe" >> $GITHUB_ENV
             ;;
           esac
 
