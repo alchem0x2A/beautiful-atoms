@@ -66,6 +66,7 @@ jobs:
 
       - name: Run Extension Build
         run: |
+          ls .
           ${{ env.BLENDER_BIN }} -b -P scripts/build_extension.py -- --repo-root . --build-dir build --export-dir export
 
       - name: Upload Built Wheels and Extension

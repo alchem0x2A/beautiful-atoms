@@ -143,7 +143,8 @@ def build_wheels(
         options = [
             "--wheel-dir",
             wheels_dir.as_posix(),
-            tmpdir.as_posix(),
+            "-e",
+            tmpdir.as_posix() + "[blender-extension]",
         ]
         if index_url:
             options += ["--index-url", str(index_url)]
@@ -317,6 +318,12 @@ def main():
         help="Directory for exported Blender extension files.",
     )
     parser.add_argument(
+        "--index-url",
+        "-i",
+        default=None,
+        help="Index URL for pip. Same as the -i option in pip.",
+    )
+    parser.add_argument(
         "--extra-wheels",
         nargs="*",
         help="Directories containing extra wheels from other platforms.",
@@ -347,7 +354,13 @@ def main():
         # import pdb; pdb.set_trace()
         clear_dirs(build_dir, export_dir)
         copy_source_code(source_code, build_dir)
-        build_wheels(source_code, pyproject, build_dir, extra_wheels)
+        build_wheels(
+            source_code,
+            pyproject,
+            build_dir,
+            index_url=args.index_url,
+            extra_wheels_dirs=extra_wheels,
+        )
         if args.only_compress_wheels:
             if len(extra_wheels) > 0:
                 raise ValueError(
