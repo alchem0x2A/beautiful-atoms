@@ -150,7 +150,10 @@ def build_wheels(
             options += ["--index-url", str(index_url)]
 
         print(f"Running: pip wheel {' '.join(options)}")
-        wc.main(options)
+        retcode = wc.main(options)
+        print(f"Pip returns code {retcode}")
+        if retcode != 0:
+            raise RuntimeError(f"Pip wheel failed with code {retcode}")
 
     print(f"Build completed. Wheels saved in {wheels_dir}")
     merge_wheels(wheels_dir, extra_wheels_dirs)
