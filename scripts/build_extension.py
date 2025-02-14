@@ -419,9 +419,9 @@ def main():
     current_platform_only = len(extra_wheels) == 0
     if args.download_python_headers:
         include_path = download_and_extract_python_headers()
-        original_cpp_flags = os.environ.get("CPPFLAGS", "")
-        new_cpp_flags = original_cpp_flags + f" -I{include_path.as_posix()}"
-        os.environ["CPPFLAGS"] = new_cpp_flags
+        # original_cpp_flags = os.environ.get("CPPFLAGS", "")
+        # new_cpp_flags = original_cpp_flags + f" -I{include_path.as_posix()}"
+        os.environ["C_INCLUDE_PATH"] = include_path.as_posix()
 
     try:
         # import pdb; pdb.set_trace()
