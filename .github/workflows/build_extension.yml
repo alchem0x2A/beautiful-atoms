@@ -68,7 +68,7 @@ jobs:
       - name: Run Extension Build
         run: |
           ls .
-          ${{ env.BLENDER_BIN }} -b -P scripts/build_extension.py -- --repo-root . --build-dir build --export-dir export
+          ${{ env.BLENDER_BIN }} -b -P scripts/build_extension.py -- --repo-root . --build-dir build --export-dir export --download-python-headers
 
       - name: Upload Built Wheels and Extension
         uses: actions/upload-artifact@v4

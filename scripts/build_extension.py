@@ -15,15 +15,75 @@ Usage:
 
 import subprocess
 import sys
+import os
 import shutil
 import tempfile
 import toml
 import site
 import warnings
 import argparse
+import requests
+import tarfile
 from pathlib import Path
 from pip._internal.operations.freeze import freeze
 from pip._internal.commands.wheel import WheelCommand
+
+PYTHON_FTP_BASE = "https://www.python.org/ftp/python/"
+
+
+def get_blender_python_version():
+    """Retrieve the Python version used by Blender."""
+    try:
+        import bpy  # noqa
+
+        blender_python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        return blender_python_version
+    except ImportError:
+        raise RuntimeError(
+            "This script must be run inside Blender's Python environment."
+        )
+
+
+def download_and_extract_python_headers():
+    """Download and extract the exact Python source matching Blender's Python version."""
+    python_version = get_blender_python_version()
+    print(f"Looking for Python header version {python_version}")
+    base_url = "https://www.python.org/ftp/python/"
+    tarball_name = f"Python-{python_version}.tgz"
+    tarball_url = f"{base_url}{python_version}/{tarball_name}"
+
+    # Create a temporary directory that persists
+    temp_dir = Path(tempfile.mkdtemp())  # mkdtemp ensures the dir is not auto-deleted
+    tarball_path = temp_dir / tarball_name
+    extract_path = temp_dir / f"Python-{python_version}"
+
+    if extract_path.exists():
+        print(
+            f"Python headers for {python_version} already extracted at {extract_path}."
+        )
+        return extract_path
+
+    # Download the tarball
+    print(f"Downloading {tarball_url} ...")
+    response = requests.get(tarball_url, stream=True)
+    response.raise_for_status()
+
+    with open(tarball_path, "wb") as file:
+        shutil.copyfileobj(response.raw, file)
+
+    # Extract the tarball
+    print(f"Extracting {tarball_name} to {extract_path} ...")
+    with tarfile.open(tarball_path, "r:gz") as tar:
+        tar.extractall(path=temp_dir)
+
+    print(f"Python headers extracted to: {extract_path}")
+    include_path = extract_path / "Include"
+    header_path = include_path / "Python.h"
+    if not header_path.is_file():
+        raise FileNotFoundError(
+            f"Header file {header_path.as_posix()} does not exist! Please check your download."
+        )
+    return include_path
 
 
 def get_platform_string(connector="-"):
@@ -337,6 +397,11 @@ def main():
         action="store_true",
         help="Only compress the wheels without building the extension.",
     )
+    parser.add_argument(
+        "--download-python-headers",
+        action="store_true",
+        help="Download and set up Python headers.",
+    )
 
     # Extract only arguments after `--`
     script_args = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
@@ -352,6 +417,11 @@ def main():
         [Path(ew) for ew in args.extra_wheels] if args.extra_wheels is not None else []
     )
     current_platform_only = len(extra_wheels) == 0
+    if args.download_python_headers:
+        include_path = download_and_extract_python_headers()
+        original_cpp_flags = os.environ.get("CPPFLAGS", "")
+        new_cpp_flags = original_cpp_flags + f" -I{include_path.as_posix()}"
+        os.environ["CPPFLAGS"] = new_cpp_flags
 
     try:
         # import pdb; pdb.set_trace()
